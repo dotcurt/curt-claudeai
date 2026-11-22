@@ -171,8 +171,8 @@ export function convertConversation(conv: ExportConversation, fallbackId = "conv
 		}
 
 		const body = textParts.join("\n\n").trim();
-		if (!body && thinkingParts.length === 0 && toolCalls.length === 0 && !produced) {
-			stats.skippedEntries++;
+		if (!body && thinkingParts.length === 0 && toolCalls.length === 0) {
+			if (!produced) stats.skippedEntries++;
 			continue;
 		}
 		const msg: CurtMessage = {
