@@ -1,0 +1,43 @@
+{
+	"uuid": "conv-0002",
+	"name": "Feature chat",
+	"created_at": "2026-11-02T09:00:00.000000Z",
+	"updated_at": "2026-11-02T09:10:00.000000Z",
+	"summary": "Demo of thinking, artifacts and voice",
+	"is_starred": true,
+	"project_uuid": "proj-77",
+	"model": "claude-sonnet-5",
+	"account": "acct-abc",
+	"chat_messages": [
+		{
+			"uuid": "f1",
+			"sender": "human",
+			"created_at": "2026-11-02T09:00:00.000000Z",
+			"content": [
+				{ "type": "voice_note", "text": "remind me what an artifact is", "title": "Voice memo" },
+				{ "type": "text", "text": "and show one" }
+			]
+		},
+		{
+			"uuid": "f2",
+			"sender": "assistant",
+			"created_at": "2026-11-02T09:05:00.000000Z",
+			"content": [
+				{ "type": "thinking", "thinking": "user wants an artifact demo", "summaries": ["demo"] },
+				{ "type": "text", "text": "Here is one." },
+				{
+					"type": "tool_use", "id": "toolu_01", "name": "artifacts",
+					"input": { "id": "art-1", "type": "application/vnd.ant.code", "title": "Demo", "command": "create", "content": "console.log(1)", "language": "javascript" }
+				}
+			]
+		},
+		{
+			"uuid": "f3",
+			"sender": "human",
+			"created_at": "2026-11-02T09:10:00.000000Z",
+			"content": [
+				{ "type": "tool_result", "tool_use_id": "toolu_01", "is_error": false, "content": [{ "type": "text", "text": "artifact saved" }] }
+			]
+		}
+	]
+}
