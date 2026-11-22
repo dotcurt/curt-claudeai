@@ -1,0 +1,26 @@
+{
+	"name": "curt-claudeai",
+	"version": "1.0.0",
+	"description": "Convert claude.ai data exports (conversations.json) to .curt single-file conversation format",
+	"license": "MIT",
+	"type": "module",
+	"engines": { "node": ">=20" },
+	"bin": { "curt-claudeai": "dist/cli.js" },
+	"files": ["dist", "README.md", "LICENSE"],
+	"main": "dist/claudeai.js",
+	"types": "dist/claudeai.d.ts",
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"test": "vitest run",
+		"prepublishOnly": "npm run build && npm test"
+	},
+	"dependencies": { "curt-format": "^1.2.0" },
+	"devDependencies": {
+		"@types/node": "^22",
+		"typescript": "^5.6.0",
+		"vitest": "^2.1.0"
+	},
+	"repository": { "type": "git", "url": "git+https://github.com/dotcurt/curt-claudeai.git" },
+	"keywords": ["curt", "claude", "claude-ai", "conversation", "export", "converter", "archive"],
+	"homepage": "https://dotcurt.org"
+}
