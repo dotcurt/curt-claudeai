@@ -126,6 +126,7 @@ export function convertConversation(conv: ExportConversation, fallbackId = "conv
 		const toolCalls: { id: string; name: string; arguments: unknown }[] = [];
 		const voiceTitles: string[] = [];
 		let voiceNoteSeen = false;
+		let produced = false;
 
 		const content = entry.content;
 		if (typeof content === "string") {
@@ -155,6 +156,7 @@ export function convertConversation(conv: ExportConversation, fallbackId = "conv
 					if (b.is_error === true) toolMsg.isError = true;
 					if (nonText.length > 0) toolMsg.nonTextContent = nonText;
 					messages.push(toolMsg);
+					produced = true;
 					stats.toolResults++;
 					if (!callId || !toolCallIds.has(callId)) stats.unlinkedToolResults++;
 				} else if (b.type === "voice_note") {
@@ -169,27 +171,25 @@ export function convertConversation(conv: ExportConversation, fallbackId = "conv
 		}
 
 		const body = textParts.join("\n\n").trim();
-		if (!body && thinkingParts.length === 0 && toolCalls.length === 0) {
+		if (!body && thinkingParts.length === 0 && toolCalls.length === 0 && !produced) {
 			stats.skippedEntries++;
 			continue;
 		}
-		if (body || thinkingParts.length > 0 || toolCalls.length > 0) {
-			const msg: CurtMessage = {
-				id,
-				role: sender === "human" ? "user" : "assistant",
-				content: body,
-				timestamp,
-			};
-			if (thinkingParts.length > 0) msg.thinking = thinkingParts.join("\n\n");
-			if (toolCalls.length > 0) msg.toolCalls = toolCalls;
-			if (voiceNoteSeen) {
-				msg.voiceNote = true;
-				stats.voiceNotes++;
-				if (voiceTitles.length > 0) msg.voiceTitle = voiceTitles[0];
-			}
-			messages.push(msg);
-			if (sender === "human" && body) firstUserText ??= body;
+		const msg: CurtMessage = {
+			id,
+			role: sender === "human" ? "user" : "assistant",
+			content: body,
+			timestamp,
+		};
+		if (thinkingParts.length > 0) msg.thinking = thinkingParts.join("\n\n");
+		if (toolCalls.length > 0) msg.toolCalls = toolCalls;
+		if (voiceNoteSeen) {
+			msg.voiceNote = true;
+			stats.voiceNotes++;
+			if (voiceTitles.length > 0) msg.voiceTitle = voiceTitles[0];
 		}
+		messages.push(msg);
+		if (sender === "human" && body) firstUserText ??= body;
 	}
 
 	const fallbackTitle = firstUserText ? titleFrom(firstUserText) : "";
