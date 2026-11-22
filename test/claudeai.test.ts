@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { convertConversation, parseExport, resolveOutputName, serializeResult } from "../src/claudeai.js";
+import { convertConversation, GENERATOR, parseExport, resolveOutputName, serializeResult } from "../src/claudeai.js";
 import { parseCurt, isCurtConversation, curtFilename } from "curt-format";
 
 const fx = (name: string) => readFileSync(join(import.meta.dirname, "fixtures", name), "utf8");
@@ -129,6 +129,9 @@ describe("serialize + naming", () => {
 		expect(isCurtConversation(back)).toBe(true);
 		expect(back?.extensions).toEqual(["tool-linkage"]);
 		expect(back?.messages[2].role).toBe("tool");
+		const envelope = JSON.parse(body) as { generator?: unknown; extensions?: unknown };
+		expect(envelope.extensions).toEqual(["tool-linkage"]); // file-level declaration
+		expect(envelope.generator).toBe(GENERATOR);
 	});
 
 	it("curtFilename follows the bulk convention", () => {
