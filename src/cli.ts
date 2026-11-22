@@ -116,7 +116,6 @@ function main(): void {
 	}
 
 	let failures = 0;
-	let stdoutUsed = 0;
 	const seenNames = new Set<string>();
 	for (const file of inputs) {
 		let raw: string;
@@ -139,6 +138,10 @@ function main(): void {
 			failures++;
 			continue;
 		}
+		if (options.stdout && (inputs.length > 1 || parsed.conversations.length > 1)) {
+			console.error("--stdout works with a single input file holding one conversation only.");
+			process.exit(2);
+		}
 		parsed.conversations.forEach((conv: ExportConversation, i: number) => {
 			const result = convertConversation(conv, `${basename(file, ".json")}-${i}`);
 			const body = serializeResult(result);
@@ -148,8 +151,7 @@ function main(): void {
 				return;
 			}
 			const { conversation, stats } = result;
-			if (options.stdout && inputs.length === 1 && parsed.conversations.length === 1) {
-				stdoutUsed++;
+			if (options.stdout) {
 				process.stdout.write(body);
 				return;
 			}
@@ -163,10 +165,6 @@ function main(): void {
 					`${stats.voiceNotes} voice notes, ${stats.skippedEntries} skipped${parsed.issues.length ? `, ${parsed.issues.length} issues` : ""})`,
 			);
 		});
-	}
-	if (options.stdout && stdoutUsed === 0) {
-		console.error("--stdout works with a single input file holding one conversation only.");
-		process.exit(2);
 	}
 	if (failures > 0) {
 		console.error(`${failures} file(s) failed.`);
