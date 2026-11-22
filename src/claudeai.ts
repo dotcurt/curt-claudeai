@@ -212,6 +212,43 @@ export function convertConversation(conv: ExportConversation, fallbackId = "conv
 	return { conversation, stats };
 }
 
+export type ParseExportResult =
+	| { conversations: ExportConversation[]; issues: string[] }
+	| { error: string };
+
+/**
+ * Accepts the three real-world input shapes:
+ * 1. bulk export: JSON array of conversation objects
+ * 2. individual export: single conversation object (has chat_messages)
+ * 3. anything else: { error }
+ * Broken entries (not objects / no chat_messages array) are reported in
+ * `issues` and skipped, never fatal for the rest of the file.
+ */
+export function parseExport(raw: string): ParseExportResult {
+	let data: unknown;
+	try {
+		data = JSON.parse(raw);
+	} catch (e) {
+		return { error: `not valid JSON: ${e instanceof Error ? e.message : e}` };
+	}
+	if (Array.isArray(data)) {
+		const conversations: ExportConversation[] = [];
+		const issues: string[] = [];
+		data.forEach((entry, i) => {
+			if (isObj(entry) && Array.isArray((entry as ExportConversation).chat_messages)) {
+				conversations.push(entry as ExportConversation);
+			} else {
+				issues.push(`entry ${i}: no chat_messages array`);
+			}
+		});
+		return { conversations, issues };
+	}
+	if (isObj(data) && Array.isArray((data as ExportConversation).chat_messages)) {
+		return { conversations: [data as ExportConversation], issues: [] };
+	}
+	return { error: "expected a conversations.json array or a single conversation object" };
+}
+
 /** Serialize a converted conversation as a complete .curt file body. */
 export function serializeResult(result: ConvertResult): string {
 	return serializeCurt(

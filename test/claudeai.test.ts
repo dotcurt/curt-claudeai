@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { convertConversation } from "../src/claudeai.js";
+import { convertConversation, parseExport } from "../src/claudeai.js";
 
 const fx = (name: string) => readFileSync(join(import.meta.dirname, "fixtures", name), "utf8");
 
@@ -36,6 +36,7 @@ describe("feature blocks", () => {
 	it("maps thinking to a verbatim message extra", () => {
 		const m = conversation.messages[1];
 		expect(m.thinking).toBe("user wants an artifact demo");
+		expect(m.content).toBe("Here is one."); // text survives alongside thinking
 	});
 
 	it("maps artifacts tool_use into toolCalls with verbatim input", () => {
@@ -68,5 +69,52 @@ describe("feature blocks", () => {
 		expect(conversation.projectUuid).toBe("proj-77");
 		expect(conversation.model).toBe("claude-sonnet-5");
 		expect(conversation.account).toBe("acct-abc");
+	});
+});
+
+describe("input shapes", () => {
+	it("handles legacy string content", () => {
+		const { conversation } = convertConversation(JSON.parse(fx("legacy-string-content.json")));
+		expect(conversation.messages.map((m) => m.content)).toEqual(["old style", "yes, string content"]);
+	});
+
+	it("parseExport splits bulk arrays and flags broken entries", () => {
+		const out = parseExport(fx("bulk-two.json"));
+		expect("error" in out).toBe(false);
+		if (!("error" in out)) {
+			expect(out.conversations).toHaveLength(2);
+			expect(out.issues).toEqual([]);
+		}
+	});
+
+	it("parseExport reports entries without chat_messages and keeps the rest", () => {
+		const out = parseExport(fx("bad-entry.json"));
+		if (!("error" in out)) {
+			expect(out.conversations).toHaveLength(1);
+			expect(out.conversations[0].uuid).toBe("bulk-b");
+			expect(out.issues).toEqual(["entry 0: no chat_messages array"]);
+		}
+	});
+
+	it("parseExport accepts a single conversation object", () => {
+		const out = parseExport(fx("single-minimal.json"));
+		if (!("error" in out)) expect(out.conversations).toHaveLength(1);
+	});
+
+	it("parseExport rejects non-conversation JSON", () => {
+		expect("error" in parseExport('{"hello":1}')).toBe(true);
+	});
+
+	it("flags tool results with is_error and leaves false unset", () => {
+		const err = convertConversation({
+			uuid: "err-1", name: "Err", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
+			chat_messages: [
+				{ uuid: "a", sender: "assistant", content: [{ type: "tool_use", id: "t1", name: "x", input: {} }] },
+				{ uuid: "b", sender: "human", content: [{ type: "tool_result", tool_use_id: "t1", is_error: true, content: "boom" }] },
+				{ uuid: "c", sender: "human", content: [{ type: "tool_result", tool_use_id: "t1", is_error: false, content: "ok" }] },
+			],
+		});
+		expect(err.conversation.messages[1].isError).toBe(true);
+		expect(err.conversation.messages[2].isError).toBeUndefined();
 	});
 });
