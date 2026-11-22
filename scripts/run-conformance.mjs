@@ -70,6 +70,7 @@ function runVectors(level, file, fn) {
 	} catch (e) {
 		infra(`cannot read/parse vector file ${resolve(vectorsDir, file)}: ${e.message}`);
 	}
+	if (!Array.isArray(spec.vectors)) infra(`vector file ${file} has no "vectors" array`);
 	for (const v of spec.vectors) fn(v);
 }
 
