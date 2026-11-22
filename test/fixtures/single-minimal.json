@@ -1,0 +1,24 @@
+{
+	"uuid": "conv-0001",
+	"name": "Minimal chat",
+	"created_at": "2026-11-01T10:00:00.000000Z",
+	"updated_at": "2026-11-01T10:05:00.000000Z",
+	"chat_messages": [
+		{
+			"uuid": "m1",
+			"sender": "human",
+			"created_at": "2026-11-01T10:00:00.000000Z",
+			"updated_at": "2026-11-01T10:00:00.000000Z",
+			"text": "What is .curt?",
+			"content": [{ "type": "text", "text": "What is .curt?" }]
+		},
+		{
+			"uuid": "m2",
+			"sender": "assistant",
+			"created_at": "2026-11-01T10:05:00.000000Z",
+			"updated_at": "2026-11-01T10:05:00.000000Z",
+			"text": "A single-file conversation format.",
+			"content": [{ "type": "text", "text": "A single-file conversation format." }]
+		}
+	]
+}
