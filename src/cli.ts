@@ -2,7 +2,7 @@
 /** curt-claudeai CLI: claude.ai data exports -> .curt files. */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { basename, extname, isAbsolute, join, resolve } from "node:path";
+import { basename, extname, join, resolve } from "node:path";
 import { curtFilename, parseCurt } from "curt-format";
 import {
 	convertConversation,
@@ -66,17 +66,22 @@ function expandInputs(inputs: string[]): string[] {
 	};
 	for (const input of inputs) {
 		if (input.includes("*") || input.includes("?")) {
-			const base = input.slice(0, input.search(/[*?]/));
-			const root = base.slice(0, base.lastIndexOf("/") + 1) || ".";
-			const suffix = input.slice(root.length);
-			const walk = (dir: string) => {
+			const pattern = input.replace(/\\/g, "/");
+			const parts = pattern.split("/");
+			let i = 0;
+			while (i < parts.length && !/[*?]/.test(parts[i])) i++;
+			const root = i > 0 ? parts.slice(0, i).join("/") + "/" : "";
+			const suffix = parts.slice(i).join("/");
+			const walk = (dir: string, rel: string) => {
 				for (const name of readdirSync(dir)) {
 					const p = join(dir, name);
-					if (statSync(p).isDirectory()) walk(p);
-					else if (simpleGlobMatch(p.slice(root.length).replace(/\\/g, "/"), suffix)) add(p);
+					const childRel = rel ? `${rel}/${name}` : name;
+					if (statSync(p).isDirectory()) walk(p, childRel);
+					else if (simpleGlobMatch(childRel, suffix)) add(p);
 				}
 			};
-			if (existsSync(root)) walk(root);
+			const rootDir = root || ".";
+			if (existsSync(rootDir)) walk(rootDir, "");
 			continue;
 		}
 		if (!existsSync(input)) {
@@ -99,10 +104,17 @@ function expandInputs(inputs: string[]): string[] {
 }
 
 function simpleGlobMatch(path: string, pattern: string): boolean {
-	const rx = new RegExp(
-		`^${pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, " ").replace(/\*/g, "[^/]*").replace(/ /g, ".*")}$`,
-	);
-	return rx.test(path);
+	let rx = "";
+	for (let i = 0; i < pattern.length; i++) {
+		const c = pattern[i];
+		if (c === "*" && pattern[i + 1] === "*") {
+			if (pattern[i + 2] === "/") { rx += "(?:[^/]+/)*"; i += 2; }
+			else { rx += ".*"; i += 1; }
+		} else if (c === "*") rx += "[^/]*";
+		else if (c === "?") rx += "[^/]";
+		else rx += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+	}
+	return new RegExp(`^${rx}$`).test(path);
 }
 
 function main(): void {
@@ -129,6 +141,9 @@ function main(): void {
 		const parsed = parseExport(raw);
 		if ("error" in parsed) {
 			console.error(`FAIL: ${file}: ${parsed.error}`);
+			if (parsed.error.includes("not valid JSON") && /\n/.test(raw.trim())) {
+				console.error(`  hint: multi-line body that is not one JSON document — looks like JSONL? try curt-convert for Claude Code transcripts`);
+			}
 			failures++;
 			continue;
 		}
