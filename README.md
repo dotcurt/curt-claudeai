@@ -5,6 +5,11 @@
 
 Convert [claude.ai](https://claude.ai) data exports into [`.curt`](https://dotcurt.org) single-file conversation files.
 
+> **Warning: output is transcript-equivalent.** Conversion is faithful, not
+> redacting: secrets, tokens, hostnames, private paths, and unreleased code in
+> a conversation ride into the `.curt` file. Never share, commit, or publish
+> `.curt` output without scrubbing first.
+
 ## Why
 
 Claude's own data export is a proprietary, one-off JSON layout that only makes sense to code written against it. `.curt` is an open, single-file conversation format: one self-describing JSON file per conversation, portable across tools and years. Converters like this one are the wedge that turns locked-in export dumps into an archive you actually own — the growing set of ecosystem writers is tracked in [dot_curt/CAPABILITIES.md](https://github.com/dotcurt/dot_curt/blob/main/CAPABILITIES.md).
@@ -111,7 +116,8 @@ including a safety briefing about sharing transcript-equivalent output.
 
 Install one of two ways:
 
-**Manual.** Copy (or symlink) the skill directory into your skills folder:
+**Manual.** Clone the repo, then copy (or symlink) the skill directory into
+your skills folder:
 
 ```sh
 cp -r skills/curt-convert/ ~/.claude/skills/curt-convert/
@@ -130,8 +136,8 @@ uploaded to claude.ai Skills unchanged.
 ## Caveats
 
 - Output is **transcript-equivalent**: anything in the conversation —
-  secrets, hostnames, private paths — rides into the `.curt` file. Scrub
-  before sharing.
+  secrets, tokens, hostnames, private paths, unreleased code — rides into
+  the `.curt` file. See the warning at the top; scrub before sharing.
 - A bulk `conversations.json` is your **entire account history**. When
   sharing one conversation, prefer exporting/converting that single file
   rather than the bulk export.
@@ -143,9 +149,10 @@ uploaded to claude.ai Skills unchanged.
 ## Conformance
 
 This writer passes the `.curt` spec's executable conformance vectors —
-45/45, covering levels L1 (parse/round-trip), L2, L3-writer (naming), and
-L4 including tool-linkage — against a corpus generated from real export
-shapes. Reproduce it against your own corpus with:
+all of them, covering levels L1 core (parse/round-trip), L2 named, L3
+writer-side (naming), and L4 extensions including tool-linkage — against
+a corpus generated from real export shapes. From a repo clone, reproduce
+it against your own corpus with:
 
 ```sh
 node scripts/run-conformance.mjs <corpusDir>
