@@ -10,11 +10,17 @@
  *   node scripts/run-conformance.mjs <corpusDir> [vectorsDir]
  *
  * Env:
- *   CURT_REFERENCE  module path of the reference implementation
- *                   (default: "curt-format" — the published reference)
- *   Vectors default to ../dot_curt/conformance/vectors relative to this repo.
+ *   CURT_REFERENCE   module path of the reference implementation
+ *                    (default: "curt-format" — the published reference)
+ *   CURT_VECTORS_DIR directory holding core/named/bulk/extensions.json
+ *                    (default: ../dot_curt/conformance/vectors relative
+ *                    to this repo; CLI arg 3 overrides both)
  *
- * Exit 0 = all applicable vectors pass; exit 1 = any failure.
+ * Exit codes:
+ *   0 = all applicable vectors pass
+ *   1 = at least one vector/corpus check failed
+ *   2 = infra/setup error (missing corpus dir, unreadable or malformed
+ *       vector JSON, unresolvable CURT_REFERENCE, unknown v.expect value)
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
@@ -27,13 +33,24 @@ const vectorsDir =
 	process.env.CURT_VECTORS_DIR ??
 	resolve(repoRoot, "..", "dot_curt", "conformance", "vectors");
 
+/** Infra/setup failure: nothing about the vectors themselves was judged. */
+function infra(msg) {
+	console.error(`conformance: ${msg}`);
+	process.exit(2);
+}
+
 if (!corpusDir) {
 	console.error("usage: node scripts/run-conformance.mjs <corpusDir> [vectorsDir]");
 	process.exit(2);
 }
 
 const refPath = process.env.CURT_REFERENCE ?? "curt-format";
-const ref = await import(refPath);
+let ref;
+try {
+	ref = await import(refPath);
+} catch (e) {
+	infra(`cannot load reference implementation "${refPath}": ${e.message}`);
+}
 const { parseCurt, serializeCurt, curtFilename } = ref;
 
 let pass = 0;
@@ -47,24 +64,35 @@ function check(level, name, ok, detail = "") {
 }
 
 function runVectors(level, file, fn) {
-	const spec = JSON.parse(readFileSync(resolve(vectorsDir, file), "utf8"));
+	let spec;
+	try {
+		spec = JSON.parse(readFileSync(resolve(vectorsDir, file), "utf8"));
+	} catch (e) {
+		infra(`cannot read/parse vector file ${resolve(vectorsDir, file)}: ${e.message}`);
+	}
 	for (const v of spec.vectors) fn(v);
+}
+
+/** parseCurt with throw folded into a null + reason. */
+function tryParse(body) {
+	try {
+		return { parsed: parseCurt(body), threw: null };
+	} catch (e) {
+		return { parsed: null, threw: e };
+	}
+}
+function verdict({ parsed, threw }) {
+	return parsed !== null ? "accept" : threw ? `throw(${threw.message})` : "reject";
 }
 
 // ---- L1 CORE: reference accepts/rejects per vector ----
 runVectors("L1", "core.json", (v) => {
-	let parsed = null;
-	let threw = null;
-	try {
-		parsed = parseCurt(v.body);
-	} catch (e) {
-		threw = e;
+	if (v.expect !== "accept" && v.expect !== "reject") {
+		infra(`core.json vector "${v.name}" has unknown expect=${JSON.stringify(v.expect)} (want "accept" or "reject")`);
 	}
-	const ok =
-		v.expect === "accept"
-			? parsed !== null
-			: parsed === null; // reject: null return or throw
-	check("L1", v.name, ok, `expect=${v.expect} got=${parsed !== null ? "accept" : threw ? `throw(${threw.message})` : "reject"}`);
+	const outcome = tryParse(v.body);
+	const ok = v.expect === "accept" ? outcome.parsed !== null : outcome.parsed === null;
+	check("L1", v.name, ok, `expect=${v.expect} got=${verdict(outcome)}`);
 });
 
 // ---- L2 NAMED: curtFilename algorithm ----
@@ -75,41 +103,44 @@ runVectors("L2", "named.json", (v) => {
 
 // ---- L4 EXTENSIONS: presence/malformation never causes rejection ----
 runVectors("L4", "extensions.json", (v) => {
-	let parsed = null;
-	let threw = null;
-	try {
-		parsed = parseCurt(v.body);
-	} catch (e) {
-		threw = e;
-	}
-	check("L4", v.name, parsed !== null, threw ? `throw(${threw.message})` : "accept");
+	const outcome = tryParse(v.body);
+	check("L4", v.name, outcome.parsed !== null, verdict(outcome));
 });
 
 // ---- Writer duty: every emitted corpus file ----
-const files = readdirSync(corpusDir).filter((f) => f.endsWith(".curt"));
+let files;
+try {
+	files = readdirSync(corpusDir).filter((f) => f.endsWith(".curt"));
+} catch (e) {
+	infra(`cannot read corpus dir ${corpusDir}: ${e.message}`);
+}
 if (files.length === 0) {
-	console.error(`no .curt files in ${corpusDir}`);
-	process.exit(2);
+	infra(`no .curt files in ${corpusDir}`);
 }
 
 for (const file of files) {
-	const body = readFileSync(resolve(corpusDir, file), "utf8");
+	let body;
+	try {
+		body = readFileSync(resolve(corpusDir, file), "utf8");
+	} catch (e) {
+		infra(`cannot read corpus file ${resolve(corpusDir, file)}: ${e.message}`);
+	}
 
 	// L1 (writer): parses under the reference
-	let parsed = null;
-	let threw = null;
-	try {
-		parsed = parseCurt(body);
-	} catch (e) {
-		threw = e;
-	}
-	check("L1", `corpus:${file}:parses`, parsed !== null, threw ? `throw(${threw.message})` : "accept");
+	const outcome = tryParse(body);
+	check("L1", `corpus:${file}:parses`, outcome.parsed !== null, verdict(outcome));
 
-	if (parsed === null) continue;
+	if (outcome.parsed === null) continue;
+	const parsed = outcome.parsed;
 
 	// Top-level generator/extensions live on the file wrapper, not the
 	// conversation parseCurt returns — read them from the raw JSON.
-	const rawDoc = JSON.parse(body.replace(/^﻿/, ""));
+	let rawDoc;
+	try {
+		rawDoc = JSON.parse(body.replace(/^﻿/, ""));
+	} catch (e) {
+		infra(`corpus file ${resolve(corpusDir, file)} parses as .curt but not as JSON: ${e.message}`);
+	}
 	const generator = rawDoc.generator;
 	const extensions = rawDoc.extensions;
 
@@ -151,10 +182,11 @@ for (const file of files) {
 		(m) => Array.isArray(m.toolCalls) && m.toolCalls.length > 0,
 	);
 	const hasToolResults = (parsed.messages ?? []).some((m) => typeof m.toolCallId === "string");
-	const exts = extensions;
-	const declared = exts === undefined ? false : Array.isArray(exts) && exts.includes("tool-linkage") ? true : exts === "tool-linkage";
+	const declared =
+		extensions === "tool-linkage" ||
+		(Array.isArray(extensions) && extensions.includes("tool-linkage"));
 	if (hasToolCalls || hasToolResults) {
-		check("L4", `corpus:${file}:tool-linkage-declared`, declared, `extensions=${JSON.stringify(exts)}`);
+		check("L4", `corpus:${file}:tool-linkage-declared`, declared, `extensions=${JSON.stringify(extensions)}`);
 	}
 }
 
