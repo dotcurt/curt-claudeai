@@ -1,0 +1,6 @@
+{
+	"name": "dotcurt",
+	"description": "dotcurt plugins for Claude Code",
+	"owner": { "name": "dotcurt" },
+	"plugins": [ { "name": "curt-claudeai", "description": "Convert Claude conversations to .curt", "source": "./" } ]
+}

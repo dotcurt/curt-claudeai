@@ -1,0 +1,8 @@
+{
+	"name": "curt-claudeai",
+	"description": "Convert Claude conversations (claude.ai exports + Claude Code session JSONL) to .curt single-file format",
+	"version": "1.0.0",
+	"author": { "name": "dotcurt" },
+	"homepage": "https://dotcurt.org",
+	"repository": "https://github.com/dotcurt/curt-claudeai"
+}
