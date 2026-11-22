@@ -14,6 +14,7 @@
  *   possible. Converted faithful-as-is (documented, no dedupe).
  */
 
+import { createHash } from "node:crypto";
 import { type CurtConversation, type CurtMessage, serializeCurt } from "curt-format";
 
 export const GENERATOR = "curt-claudeai@1.0.0";
@@ -225,6 +226,9 @@ export type ParseExportResult =
  * `issues` and skipped, never fatal for the rest of the file.
  */
 export function parseExport(raw: string): ParseExportResult {
+	// A UTF-8 BOM is not JSON, but Windows editors prepend one anyway (same
+	// tolerance as the reference parseCurt).
+	if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
 	let data: unknown;
 	try {
 		data = JSON.parse(raw);
@@ -256,4 +260,29 @@ export function serializeResult(result: ConvertResult): string {
 		GENERATOR,
 		result.conversation.extensions as string[] | undefined,
 	);
+}
+
+/**
+ * Deterministic, collision-free output filename for a bulk run.
+ *
+ * `curtFilename` derives its name from `createdAt` + `conversation.id`, and
+ * conversations from different export files can share both, so different
+ * inputs can produce identical names and silently overwrite. The first
+ * occurrence keeps the plain `curtFilename` output; later ones get a
+ * `-<6 hex>` discriminator derived from a SHA-256 of the source key
+ * ("<file>#<index>" — stable across runs, no randomness). SPEC.md's naming
+ * rule is a convention (readers must not depend on file names), so the
+ * suffixed name stays spec-compatible.
+ */
+export function resolveOutputName(base: string, sourcePath: string, seen: Set<string>): string {
+	if (!seen.has(base)) {
+		seen.add(base);
+		return base;
+	}
+	const hex = createHash("sha256").update(sourcePath).digest("hex");
+	const tagged = (n: number) => base.replace(/\.curt$/, `-${hex.slice(0, n)}.curt`);
+	let name = tagged(6);
+	if (seen.has(name)) name = tagged(12);
+	seen.add(name);
+	return name;
 }

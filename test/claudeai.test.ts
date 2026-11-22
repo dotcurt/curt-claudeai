@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { convertConversation, parseExport } from "../src/claudeai.js";
+import { convertConversation, parseExport, resolveOutputName, serializeResult } from "../src/claudeai.js";
+import { parseCurt, isCurtConversation, curtFilename } from "curt-format";
 
 const fx = (name: string) => readFileSync(join(import.meta.dirname, "fixtures", name), "utf8");
 
@@ -116,5 +117,38 @@ describe("input shapes", () => {
 		});
 		expect(err.conversation.messages[1].isError).toBe(true);
 		expect(err.conversation.messages[2].isError).toBeUndefined();
+	});
+});
+
+describe("serialize + naming", () => {
+	it("round-trips through parseCurt and keeps tool-linkage declared", () => {
+		const result = convertConversation(JSON.parse(fx("single-features.json")));
+		const body = serializeResult(result);
+		const back = parseCurt(body);
+		expect(back).not.toBeNull();
+		expect(isCurtConversation(back)).toBe(true);
+		expect(back?.extensions).toEqual(["tool-linkage"]);
+		expect(back?.messages[2].role).toBe("tool");
+	});
+
+	it("curtFilename follows the bulk convention", () => {
+		// suffix = id after last "_" else last 8 chars: "conv-0001" -> "onv-0001"
+		const result = convertConversation(JSON.parse(fx("single-minimal.json")));
+		expect(curtFilename(result.conversation)).toBe("2026-11-01 minimal-chat onv-0001.curt");
+	});
+
+	it("resolveOutputName is deterministic and collision-safe", () => {
+		const seen = new Set<string>();
+		const a = resolveOutputName("same conv 0001.curt", "/x/fileA.json#0", seen);
+		const b = resolveOutputName("same conv 0001.curt", "/x/fileB.json#0", seen);
+		expect(a).not.toBe(b);
+		expect(resolveOutputName("same conv 0001.curt", "/x/fileA.json#0", new Set())).toBe(a); // stable
+	});
+
+	it("strips a leading BOM and rejects non-JSON bodies", () => {
+		const out = parseExport("﻿" + fx("single-minimal.json"));
+		expect("error" in out).toBe(false); // BOM must not make parseExport choke
+		if (!("error" in out)) expect(out.conversations).toHaveLength(1);
+		expect("error" in parseExport("not json{")).toBe(true);
 	});
 });
